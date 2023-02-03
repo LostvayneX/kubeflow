@@ -1,13 +1,3 @@
-import sys
-import os
-print(sys.path)
-sys.path.append('/home/ec2-user/.local/lib/python3.8/site-packages')
-sys.path.append('/usr/lib64/python3.8/site-packages')
-sys.path.append('/usr/lib/python3.8/site-packages')
-sys.path.append('/home/ec2-user/miniconda3/lib/python3.10/site-packages ')
-os.system('pip3 install retrying')
-print(sys.path)
-#os.system('pip3 list')
 from retrying import retry
 from e2e.utils.utils import load_yaml_file, print_banner
 import argparse
@@ -65,9 +55,9 @@ Install_Sequence = [
 
 
 def install_kubeflow(
-        installation_option, deployment_option,  aws_telemetry=False
+    installation_option, deployment_option, cluster_name, aws_telemetry=True
 ):
-    
+    print(cluster_name)
     if deployment_option == "vanilla":
         installation_config = load_yaml_file(INSTALLATION_CONFIG_VANILLA)
     elif deployment_option == "cognito":
@@ -90,20 +80,23 @@ def install_kubeflow(
             installation_option,
             component,
             installation_config,
+            cluster_name
         )
 
-#    if aws_telemetry == True:
-#        install_component(
-#            installation_option,
-#            "aws-telemetry",
-#            installation_config
-#        )
-#
+    if aws_telemetry == True:
+        install_component(
+            installation_option,
+            "aws-telemetry",
+            installation_config,
+            cluster_name,
+        )
+
 
 def install_component(
     installation_option,
     component_name,
     installation_config,
+    cluster_name,
     crd_established=True,
 ):
     # component not applicable for deployment option
@@ -113,7 +106,7 @@ def install_component(
         print(f"==========Installing {component_name}==========")
         # remote repo
         if "repo"in installation_config[component_name]["installation_options"][installation_option]:
-            install_remote_component(component_name)
+            install_remote_component(component_name, cluster_name)
         # local repo
         else:
             installation_paths = installation_config[component_name]["installation_options"][installation_option]["paths"]
@@ -144,14 +137,14 @@ def install_component(
                     print(
                         "wait for 30s for cert-manager-webhook resource to be ready..."
                     )
-                    time.sleep(10)
+                    time.sleep(30)
 
         if "validations" in installation_config[component_name]:
             validate_component_installation(installation_config, component_name)
         print(f"All {component_name} pods are running!")
 
 
-@retry(stop_max_attempt_number=3, wait_fixed=1500)
+@retry(stop_max_attempt_number=3, wait_fixed=15000)
 def validate_component_installation(installation_config, component_name):
     labels = installation_config[component_name]["validations"]["pods"]["labels"]
     namespace = installation_config[component_name]["validations"]["pods"]["namespace"]
@@ -162,10 +155,12 @@ def validate_component_installation(installation_config, component_name):
         kubectl_wait_pods(value, namespace, key)
 
 
-def install_remote_component(component_name):
+def install_remote_component(component_name, cluster_name):
     # cert-manager official chart command call
     if component_name == "cert-manager":
         install_certmanager()
+    elif component_name == "aws-load-balancer-controller":
+        install_alb_controller(cluster_name)
     elif component_name == "ack-sagemaker-controller":
         install_ack_controller()
 
@@ -182,57 +177,57 @@ def install_certmanager():
     )
 
 
-#def install_alb_controller(cluster_name):
-#    exec_shell(f"helm repo add eks https://aws.github.io/eks-charts".split())
-#
-#    exec_shell(f"helm repo update")
-#
-#    exec_shell(
-#        f"helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-controller \
-#            -n kube-system \
-#            --set clusterName={cluster_name} \
-#            --set serviceAccount.create=false \
-#            --set serviceAccount.name=aws-load-balancer-controller \
-#            --version v1.4.3"
-#    )
-#
+def install_alb_controller(cluster_name):
+    exec_shell(f"helm repo add eks https://aws.github.io/eks-charts".split())
 
-#def install_ack_controller():
-#    SERVICE = "sagemaker"
-#    RELEASE_VERSION = "v0.4.5"
-#    CHART_EXPORT_PATH = "../../charts/common/ack-controller"
-#    CHART_REF = f"{SERVICE}-chart"
-#    CHART_REPO = f"public.ecr.aws/aws-controllers-k8s/{CHART_REF}"
-#    CHART_PACKAGE = f"{CHART_REF}-{RELEASE_VERSION}.tgz"
-#    ACK_K8S_NAMESPACE = "ack-system"
-#    cfg = load_yaml_file(file_path="./utils/ack_sm_controller_bootstrap/config.yaml")
-#    IAM_ROLE_ARN_FOR_IRSA = cfg["ack_sagemaker_oidc_role"]
-#    ACK_AWS_REGION = cfg["cluster"]["region"]
-#
-#    exec_shell(f"mkdir -p {CHART_EXPORT_PATH}")
-#    exec_shell(
-#        f"aws ecr-public get-login-password --region us-east-1 | "
-#        + "helm registry login --username AWS --password-stdin public.ecr.aws"
-#    )
-#    exec_shell(
-#        f"helm pull oci://{CHART_REPO} --version {RELEASE_VERSION} -d {CHART_EXPORT_PATH}"
-#    )
-#    exec_shell(f"tar xvf {CHART_EXPORT_PATH}/{CHART_PACKAGE} -C {CHART_EXPORT_PATH}")
-#    exec_shell(
-#        f"yq e '.aws.region=\"{ACK_AWS_REGION}\"' -i {CHART_EXPORT_PATH}/{SERVICE}-chart/values.yaml"
-#    )
-#    exec_shell(
-#        f'yq e \'.serviceAccount.annotations."eks.amazonaws.com/role-arn"="{IAM_ROLE_ARN_FOR_IRSA}"\' '
-#        + f"-i {CHART_EXPORT_PATH}/{SERVICE}-chart/values.yaml"
-#    )
-#    exec_shell(
-#        f'yq e \'.role.labels."rbac.authorization.kubeflow.org/aggregate-to-kubeflow-edit"="true"\' '
-#        + f"-i {CHART_EXPORT_PATH}/{SERVICE}-chart/values.yaml"
-#    )
-#    exec_shell(
-#        f"helm upgrade --install -n {ACK_K8S_NAMESPACE} --create-namespace ack-{SERVICE}-controller "
-#        f"{CHART_EXPORT_PATH}/{SERVICE}-chart"
-#    )
+    exec_shell(f"helm repo update")
+
+    exec_shell(
+        f"helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-controller \
+            -n kube-system \
+            --set clusterName={cluster_name} \
+            --set serviceAccount.create=false \
+            --set serviceAccount.name=aws-load-balancer-controller \
+            --version v1.4.3"
+    )
+
+
+def install_ack_controller():
+    SERVICE = "sagemaker"
+    RELEASE_VERSION = "v0.4.5"
+    CHART_EXPORT_PATH = "../../charts/common/ack-controller"
+    CHART_REF = f"{SERVICE}-chart"
+    CHART_REPO = f"public.ecr.aws/aws-controllers-k8s/{CHART_REF}"
+    CHART_PACKAGE = f"{CHART_REF}-{RELEASE_VERSION}.tgz"
+    ACK_K8S_NAMESPACE = "ack-system"
+    cfg = load_yaml_file(file_path="./utils/ack_sm_controller_bootstrap/config.yaml")
+    IAM_ROLE_ARN_FOR_IRSA = cfg["ack_sagemaker_oidc_role"]
+    ACK_AWS_REGION = cfg["cluster"]["region"]
+
+    exec_shell(f"mkdir -p {CHART_EXPORT_PATH}")
+    exec_shell(
+        f"aws ecr-public get-login-password --region us-east-1 | "
+        + "helm registry login --username AWS --password-stdin public.ecr.aws"
+    )
+    exec_shell(
+        f"helm pull oci://{CHART_REPO} --version {RELEASE_VERSION} -d {CHART_EXPORT_PATH}"
+    )
+    exec_shell(f"tar xvf {CHART_EXPORT_PATH}/{CHART_PACKAGE} -C {CHART_EXPORT_PATH}")
+    exec_shell(
+        f"yq e '.aws.region=\"{ACK_AWS_REGION}\"' -i {CHART_EXPORT_PATH}/{SERVICE}-chart/values.yaml"
+    )
+    exec_shell(
+        f'yq e \'.serviceAccount.annotations."eks.amazonaws.com/role-arn"="{IAM_ROLE_ARN_FOR_IRSA}"\' '
+        + f"-i {CHART_EXPORT_PATH}/{SERVICE}-chart/values.yaml"
+    )
+    exec_shell(
+        f'yq e \'.role.labels."rbac.authorization.kubeflow.org/aggregate-to-kubeflow-edit"="true"\' '
+        + f"-i {CHART_EXPORT_PATH}/{SERVICE}-chart/values.yaml"
+    )
+    exec_shell(
+        f"helm upgrade --install -n {ACK_K8S_NAMESPACE} --create-namespace ack-{SERVICE}-controller "
+        f"{CHART_EXPORT_PATH}/{SERVICE}-chart"
+    )
 
 
 if __name__ == "__main__":
@@ -270,18 +265,19 @@ if __name__ == "__main__":
         help=f"Kubeflow deployment options default is set to {DEPLOYMENT_OPTION_DEFAULT}",
         required=False,
     )
-#
-#    parser.add_argument(
-#        "--cluster_name",
-#        type=str,
-#        help=f"EKS cluster Name",
-#        required=True,
-#    )
-#
+
+    parser.add_argument(
+        "--cluster_name",
+        type=str,
+        help=f"EKS cluster Name",
+        required=True,
+    )
+
     args, _ = parser.parse_known_args()
 
     install_kubeflow(
         args.installation_option,
         args.deployment_option,
+        args.cluster_name,
         args.aws_telemetry,
     )
