@@ -1,4 +1,10 @@
 #!/bin/bash
+read -p "What is your Cluster Name ?" name
+read -p "What is your Cluster Region ?" region
+export CLUSTER_NAME=$name
+export CLUSTER_REGION=$region
+echo $CLUSTER_NAME
+echo $CLUSTER_REGION
 make install-tools
 alias python=python3.8
 make deploy-kubeflow INSTALLATION_OPTION=kustomize DEPLOYMENT_OPTION=vanilla

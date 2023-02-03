@@ -62,10 +62,10 @@ install-python-packages:
 	python3.8 -m pip install -r tests/e2e/requirements.txt
 
 install-tools: install-awscli install-eksctl install-kubectl install-kustomize install-yq install-jq install-terraform install-helm install-python install-python-packages
-#
-#verify-cluster-variables:
-#	test $(CLUSTER_NAME) || (echo Please export CLUSTER_NAME variable ; exit 1)
-#	test $(CLUSTER_REGION) || (echo Please export CLUSTER_REGION variable ; exit 1)
+
+verify-cluster-variables:
+	test $(CLUSTER_NAME) || (echo Please export CLUSTER_NAME variable ; exit 1)
+	test $(CLUSTER_REGION) || (echo Please export CLUSTER_REGION variable ; exit 1)
 
 #create-eks-cluster: verify-cluster-variables
 #	eksctl create cluster \
@@ -83,7 +83,6 @@ install-tools: install-awscli install-eksctl install-kubectl install-kustomize i
 #connect-to-eks-cluster: verify-cluster-variables
 #	aws eks update-kubeconfig --name $(CLUSTER_NAME) --region $(CLUSTER_REGION)
 #
-
 port-forward:
 	$(eval IP_ADDRESS:=127.0.0.1)
 	$(eval PORT:=8080)
@@ -102,7 +101,8 @@ port-forward:
 deploy-kubeflow: 
 	$(eval DEPLOYMENT_OPTION:=vanilla)
 	$(eval INSTALLATION_OPTION:=kustomize)
-	cd tests/e2e && PYTHONPATH=..  python3.8 utils/kubeflow_installation.py --deployment_option $(DEPLOYMENT_OPTION) --installation_option $(INSTALLATION_OPTION)	
+	cd tests/e2e && PYTHONPATH=.. python3.8 utils/kubeflow_installation.py --deployment_option $(DEPLOYMENT_OPTION) --installation_option $(INSTALLATION_OPTION) --cluster_name $(CLUSTER_NAME) 
+
 delete-kubeflow:
 	$(eval DEPLOYMENT_OPTION:=vanilla)
 	$(eval INSTALLATION_OPTION:=kustomize)

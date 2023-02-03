@@ -55,8 +55,12 @@ Install_Sequence = [
 
 
 def install_kubeflow(
-    installation_option, deployment_option, cluster_name, aws_telemetry=True
+    installation_option, deployment_option, cluster_name, aws_telemetry=False,sagemaker_enabled=False,alb_enabled=False
 ):
+    if sagemaker_enabled== False:
+        Install_Sequence.remove("ack-sagemaker-controller")
+    if alb_enabled== False:
+        Install_Sequence.remove("aws-load-balancer-controller")         
     print(cluster_name)
     if deployment_option == "vanilla":
         installation_config = load_yaml_file(INSTALLATION_CONFIG_VANILLA)
@@ -80,7 +84,9 @@ def install_kubeflow(
             installation_option,
             component,
             installation_config,
-            cluster_name
+            cluster_name,
+            sagemaker_enabled,
+            alb_enabled
         )
 
     if aws_telemetry == True:
@@ -89,6 +95,8 @@ def install_kubeflow(
             "aws-telemetry",
             installation_config,
             cluster_name,
+            sagemaker_enabled,
+            alb_enabled
         )
 
 
@@ -97,16 +105,22 @@ def install_component(
     component_name,
     installation_config,
     cluster_name,
+    sagemaker_enabled,
+    alb_enabled,
     crd_established=True,
 ):
     # component not applicable for deployment option
     if component_name not in installation_config:
         return
     else:
+        if component_name=="ack-sagemaker-enabled" and sagemaker_enabled==False:
+            return
+        if component_name=="aws-load-balancer-enabled" and alb_enabled==False:
+            return
         print(f"==========Installing {component_name}==========")
         # remote repo
         if "repo"in installation_config[component_name]["installation_options"][installation_option]:
-            install_remote_component(component_name, cluster_name)
+            install_remote_component(component_name, cluster_name,sagemaker_enabled,alb_enabled)
         # local repo
         else:
             installation_paths = installation_config[component_name]["installation_options"][installation_option]["paths"]
@@ -245,7 +259,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--aws_telemetry",
         type=bool,
-        default=True,
+        default=False,
         help=f"AWS Telemetry tracking",
         required=False,
     )
@@ -272,6 +286,21 @@ if __name__ == "__main__":
         help=f"EKS cluster Name",
         required=True,
     )
+    
+    parser.add_argument(
+        "--sagemaker_enabled",
+        type=bool,
+        default=False,
+        help=f"Enable SageMaker",
+        required=False,
+    )
+    parser.add_argument(
+        "--alb_enabled",
+        type=bool,
+        default=False,
+        help=f"Enable ALB",
+        required=False,
+    )        
 
     args, _ = parser.parse_known_args()
 
@@ -280,4 +309,7 @@ if __name__ == "__main__":
         args.deployment_option,
         args.cluster_name,
         args.aws_telemetry,
+        args.sagemaker_enabled,
+        args.alb_enabled
     )
+
